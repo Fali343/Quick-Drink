@@ -1,0 +1,173 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Quick Drink - Cassa Ottimizzata</title>
+  <style>
+    body { font-family: Arial; text-align: center; padding: 20px; background: #f0f0f0; }
+    h1 { color: #4a0072; }
+    section { display: none; margin-top: 20px; }
+    .drink-btn { padding: 10px; margin: 10px; border-radius: 8px; background-color: #4a0072; color: white; cursor: pointer; }
+    .drink-img { width: 80px; height: 80px; border-radius: 10px; }
+    table { margin: 20px auto; border-collapse: collapse; width: 80%; max-height: 400px; overflow-y: auto; display: block; }
+    th, td { padding: 10px; border: 1px solid #ccc; }
+    th { background: #eee; }
+    #totale { font-weight: bold; color: green; }
+  </style>
+</head>
+<body>
+
+<h1>🍸 Quick Drink</h1>
+<p>Benvenuto nel sistema interattivo per ordinare e gestire drink!</p>
+
+<div>
+  <select id="ruolo" onchange="mostraSezione()">
+    <option value="">-- Seleziona il tuo ruolo --</option>
+    <option value="cliente">Cliente</option>
+    <option value="admin">Admin (Cassa)</option>
+  </select>
+</div>
+
+<!-- CLIENTE -->
+<section id="cliente">
+  <h2>Benvenuto Cliente</h2>
+  <input id="nomeCliente" placeholder="Il tuo nome" /><br><br>
+  <div>
+    <img src="https://www.thecocktaildb.com/images/media/drink/metwgh1606770327.jpg" class="drink-img"><br>
+    <button class="drink-btn" onclick="ordina('Mojito', 6)">Mojito - 6€</button><br>
+    <img src="https://www.thecocktaildb.com/images/media/drink/vyxwut1468875960.jpg" class="drink-img"><br>
+    <button class="drink-btn" onclick="ordina('Spritz', 5)">Spritz - 5€</button><br>
+    <img src="https://www.thecocktaildb.com/images/media/drink/mrz9091589574515.jpg" class="drink-img"><br>
+    <button class="drink-btn" onclick="ordina('Daiquiri', 7)">Daiquiri - 7€</button><br>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/4/45/A_small_cup_of_coffee.JPG" class="drink-img"><br>
+    <button class="drink-btn" onclick="ordina('Caffè', 2)">Caffè - 2€</button>
+  </div>
+  <p id="confermaOrdine"></p>
+</section>
+
+<!-- ADMIN -->
+<section id="admin">
+  <h2>Gestione Cassa</h2>
+  <table>
+    <thead>
+      <tr><th>Cliente</th><th>Drink</th><th>Prezzo (€)</th><th>Stato</th><th>Azioni</th></tr>
+    </thead>
+    <tbody id="tabellaOrdini"></tbody>
+  </table>
+  <p>Totale incassato: <span id="totale">0</span> €</p>
+  <button onclick="chiudiCassa()">Chiudi Cassa</button>
+  <button onclick="scaricaExcel()">Scarica Report Excel</button>
+</section>
+
+<script>
+  let ordini = JSON.parse(localStorage.getItem('ordini')) || [];
+  let totale = 0;
+
+  function mostraSezione() {
+    const ruolo = document.getElementById('ruolo').value;
+    document.getElementById('cliente').style.display = ruolo === 'cliente' ? 'block' : 'none';
+    document.getElementById('admin').style.display = ruolo === 'admin' ? 'block' : 'none';
+    aggiornaCassa();
+  }
+
+  function ordina(drink, prezzo) {
+    const nome = document.getElementById('nomeCliente').value;
+    if (!nome) {
+      alert('Inserisci il tuo nome');
+      return;
+    }
+    ordini.push({ nome, drink, prezzo, stato: 'in attesa' });
+    localStorage.setItem('ordini', JSON.stringify(ordini));
+    document.getElementById('confermaOrdine').innerText = `Ordine ricevuto: ${drink}`;
+  }
+
+  function aggiornaCassa() {
+    const tabella = document.getElementById('tabellaOrdini');
+    tabella.innerHTML = '';
+    totale = 0;
+    let visibili = ordini.slice(-10).reverse();
+    visibili.forEach((o, i) => {
+      if (o.stato !== 'declinato') totale += o.prezzo;
+      tabella.innerHTML += `
+        <tr>
+          <td>${o.nome}</td>
+          <td>${o.drink}</td>
+          <td>${o.prezzo}</td>
+          <td>${o.stato}</td>
+          <td>
+            <button onclick="completaOrdine(${ordini.indexOf(o)})">✅</button>
+            <button onclick="declinaOrdine(${ordini.indexOf(o)})">❌</button>
+          </td>
+        </tr>
+      `;
+    });
+    document.getElementById('totale').innerText = totale;
+  }
+
+  function completaOrdine(index) {
+    ordini[index].stato = 'completato';
+    localStorage.setItem('ordini', JSON.stringify(ordini));
+    aggiornaCassa();
+  }
+
+  function declinaOrdine(index) {
+    ordini[index].stato = 'declinato';
+    localStorage.setItem('ordini', JSON.stringify(ordini));
+    aggiornaCassa();
+  }
+
+  function chiudiCassa() {
+    if (confirm('Azzerare tutte le comande?')) {
+      localStorage.removeItem('ordini');
+      ordini = [];
+      aggiornaCassa();
+    }
+  }
+
+  function scaricaExcel() {
+    const righe = ['Cliente,Drink,Prezzo (€),Stato'];
+    let utenti = new Set();
+    let ricevute = 0;
+    let declinate = 0;
+    const countDrink = {};
+
+    ordini.forEach(o => {
+      righe.push(`${o.nome},${o.drink},${o.prezzo},${o.stato}`);
+      utenti.add(o.nome);
+      if (o.stato === 'declinato') declinate++;
+      if (o.stato !== 'declinato') ricevute++;
+      countDrink[o.drink] = (countDrink[o.drink] || 0) + 1;
+    });
+
+    righe.push('');
+    righe.push(`Utenti unici: ${utenti.size}`);
+    righe.push(`Comande ricevute: ${ricevute}`);
+    righe.push(`Comande declinate: ${declinate}`);
+    righe.push(`Totale incassato: ${totale} €`);
+    righe.push('');
+    righe.push('Drink più ordinati:');
+    for (let drink in countDrink) {
+      righe.push(`${drink}: ${countDrink[drink]} ordini`);
+    }
+
+    const blob = new Blob([righe.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'report_cassa_quickdrink.csv');
+    link.click();
+  }
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'ordini') {
+      ordini = JSON.parse(localStorage.getItem('ordini')) || [];
+      aggiornaCassa();
+    }
+  });
+
+  window.onload = aggiornaCassa;
+</script>
+
+</body>
+</html>
